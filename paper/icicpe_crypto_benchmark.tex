@@ -28,7 +28,6 @@ forecasting, but many empirical studies rely on single train-test splits,
 weak baselines, or validation schemes that risk lookahead bias. We present a
 walk-forward benchmark for daily cryptocurrency return and realized volatility
 forecasting across BTC, ETH, SOL, BNB, and XRP from 2020--2025. The benchmark
-compares naive and historical-mean baselines, ARIMA, XGBoost, GARCH as a
 compares naive and historical-mean baselines, ARIMA, XGBoost, LSTM, N-BEATS,
 PatchTST, Temporal Fusion Transformer, the zero-shot Chronos foundation model,
 and GARCH(1,1) as a volatility-only baseline. Forecasts are evaluated at
@@ -145,8 +144,7 @@ workers and completed in approximately 33 minutes. The full benchmark writes
 one metrics table and one prediction table, enabling the summary statistics,
 rank tables, figures, and Diebold-Mariano tests to be regenerated from saved
 forecast outputs. Code, configurations, and seeds will be released in a public
-GitHub repository upon acceptance; the corresponding commit hash is recorded
-with this submission.
+GitHub repository upon acceptance.
 
 \section{Results}
 Table \ref{tab:rmse} reports mean RMSE across the full benchmark. The one-day
@@ -240,8 +238,7 @@ work will add volatility-regime error analysis and include probabilistic scores
 for models that produce predictive distributions.
 
 \section*{Acknowledgments}
-The author acknowledges WorldQuant University as the submission affiliation
-for ICICPE 2026.
+Acknowledgments will appear in the camera-ready version.
 
 \bibliographystyle{ICICPEtran}
 \bibliography{references}
