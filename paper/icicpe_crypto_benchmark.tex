@@ -29,9 +29,10 @@ weak baselines, or validation schemes that risk lookahead bias. We present a
 walk-forward benchmark for daily cryptocurrency return and realized volatility
 forecasting across BTC, ETH, SOL, BNB, and XRP from 2020--2025. The benchmark
 compares naive and historical-mean baselines, ARIMA, XGBoost, GARCH as a
-volatility-only baseline, LSTM, N-BEATS, PatchTST, Temporal Fusion Transformer,
-and the zero-shot Chronos foundation model. Forecasts are evaluated at one-day
-and seven-day horizons over 237 asset-splits per target, horizon, and
+compares naive and historical-mean baselines, ARIMA, XGBoost, LSTM, N-BEATS,
+PatchTST, Temporal Fusion Transformer, the zero-shot Chronos foundation model,
+and GARCH(1,1) as a volatility-only baseline. Forecasts are evaluated at
+one-day and seven-day horizons over 237 asset-splits per target, horizon, and
 applicable model using RMSE, MAE, directional accuracy for returns, and
 Diebold-Mariano tests with the Harvey-Leybourne-Newbold correction. In the full
 benchmark, ARIMA obtains the lowest mean RMSE for one-day returns, Chronos is
@@ -143,7 +144,9 @@ repository. The reported outputs were generated from repository revision
 workers and completed in approximately 33 minutes. The full benchmark writes
 one metrics table and one prediction table, enabling the summary statistics,
 rank tables, figures, and Diebold-Mariano tests to be regenerated from saved
-forecast outputs.
+forecast outputs. Code, configurations, and seeds will be released in a public
+GitHub repository upon acceptance; the corresponding commit hash is recorded
+with this submission.
 
 \section{Results}
 Table \ref{tab:rmse} reports mean RMSE across the full benchmark. The one-day
@@ -229,9 +232,12 @@ one-day returns, Chronos is marginally strongest for seven-day returns, and
 PatchTST shows clear gains on one-day realized volatility, with a smaller and
 less statistically distinguished lead at the seven-day horizon. The broader
 lesson is methodological: in crypto forecasting, careful validation and strong
-baselines matter as much as model class. Future work will add volatility-regime
-error analysis and include probabilistic scores for models that produce
-predictive distributions.
+baselines matter as much as model class. Our scope is intentionally narrow:
+daily data on five major assets, point forecasts only, and zero-shot use of one
+foundation model. Generalization to intraday horizons, larger asset universes,
+fine-tuned foundation models, and probabilistic evaluation remains open. Future
+work will add volatility-regime error analysis and include probabilistic scores
+for models that produce predictive distributions.
 
 \section*{Acknowledgments}
 The author acknowledges WorldQuant University as the submission affiliation
