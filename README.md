@@ -37,7 +37,7 @@ pip install -r requirements.txt
 python -m src.experiment --models naive,arima,garch --assets BTC-USD --fast
 
 # 3. Full classical + ML run (CPU, ~30 min)
-python -m src.experiment --models naive,arima,garch,xgboost
+python -m src.experiment --models naive,hist_mean,arima,garch,xgboost
 
 # 4. Neural models (GPU recommended, ~3-6 hours total)
 python -m src.experiment --models lstm,nbeats,patchtst,tft
@@ -48,6 +48,32 @@ python -m src.experiment --models chronos
 # 6. Aggregate and analyze
 python -m src.analyze
 ```
+
+## Modal GPU Runs
+
+Use Modal for neural and foundation-model runs. On Windows PowerShell, set
+UTF-8 output first so Modal's CLI status output renders correctly:
+
+```powershell
+$env:PYTHONIOENCODING='utf-8'
+
+# Cheap GPU smoke test: all GPU-backed models, BTC only, one split, five steps.
+python -m modal run modal_experiment.py --models lstm,nbeats,patchtst,tft,chronos --assets BTC-USD --targets log_return --horizons 1 --max-splits 1 --model-max-steps 5 --run-name smoke-all-gpu
+
+# Deadline run: keep all assets/targets/horizons, but cap splits and steps first.
+python -m modal run modal_experiment.py --models lstm,nbeats,patchtst,tft,chronos --full --max-splits 10 --model-max-steps 200 --run-name neural-deadline-v1
+
+# Full sequential run using config max_steps. This can be very expensive because
+# it retrains every neural model on every walk-forward split.
+python -m modal run modal_experiment.py --models lstm,nbeats,patchtst,tft,chronos --full --max-splits 0 --model-max-steps 0 --run-name neural-full
+
+# Full classical + XGBoost run on Modal CPU workers, useful if local xgboost is
+# not installed.
+python -m modal run modal_experiment.py --models naive,hist_mean,arima,garch,xgboost --full --gpu CPU --max-splits 0 --model-max-steps 0 --run-name classical-full
+```
+
+Modal results are saved in the `crypto-forecast-results` Modal volume and
+downloaded locally as zip archives under `results/modal_archives/`.
 
 ## Compute Budget Estimate
 

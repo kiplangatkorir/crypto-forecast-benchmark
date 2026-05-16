@@ -5,6 +5,7 @@ Usage:
 """
 from __future__ import annotations
 
+import argparse
 import logging
 from pathlib import Path
 
@@ -42,15 +43,16 @@ def summary_table(metrics: pd.DataFrame) -> pd.DataFrame:
 
 def rank_models(metrics: pd.DataFrame, metric: str = "rmse") -> pd.DataFrame:
     """Mean rank across splits per (target, horizon)."""
+    rank_col = f"rank_{metric}"
+    ranked = metrics.copy()
+    ranked[rank_col] = ranked.groupby(
+        ["asset", "target", "horizon", "split_id"]
+    )[metric].rank(method="average")
     ranks = (
-        metrics
-        .groupby(["target", "horizon", "split_id"])
-        .apply(lambda g: g.set_index("model")[metric].rank())
-        .reset_index()
-        .groupby(["target", "horizon", "model"])[metric]
+        ranked.groupby(["target", "horizon", "model"])[rank_col]
         .mean()
         .reset_index()
-        .rename(columns={metric: f"mean_rank_{metric}"})
+        .rename(columns={rank_col: f"mean_rank_{metric}"})
     )
     return ranks.sort_values(["target", "horizon", f"mean_rank_{metric}"])
 
@@ -85,7 +87,7 @@ def plot_metric_by_model(
         plt.figure(figsize=(10, 5))
         order = g.groupby("model")[metric].median().sort_values().index
         sns.boxplot(data=g, x="model", y=metric, order=order)
-        plt.title(f"{metric.upper()} across walk-forward splits — {target}, h={horizon}")
+        plt.title(f"{metric.upper()} across walk-forward splits - {target}, h={horizon}")
         plt.xticks(rotation=30, ha="right")
         plt.tight_layout()
         fp = out_dir / f"{metric}_{target}_h{horizon}.png"
@@ -114,10 +116,15 @@ def plot_dm_heatmap(
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--results-dir", default=None)
+    parser.add_argument("--figures-dir", default=None)
+    args = parser.parse_args()
+
     with open("configs/config.yaml") as f:
         cfg = yaml.safe_load(f)
-    results_dir = Path(cfg["output"]["results_dir"])
-    fig_dir = Path(cfg["output"]["figures_dir"])
+    results_dir = Path(args.results_dir or cfg["output"]["results_dir"])
+    fig_dir = Path(args.figures_dir or results_dir / "figures")
 
     metrics, preds = load_results(results_dir)
     logger.info("Loaded %d metric rows, %d prediction rows", len(metrics), len(preds))
@@ -147,7 +154,7 @@ def main():
         pmat.to_csv(results_dir / f"dm_pvalues_{target}_h{horizon}.csv")
         plot_dm_heatmap(
             pmat,
-            f"Diebold-Mariano p-values — {target}, h={horizon}",
+            f"Diebold-Mariano p-values - {target}, h={horizon}",
             fig_dir / f"dm_heatmap_{target}_h{horizon}.png",
         )
 

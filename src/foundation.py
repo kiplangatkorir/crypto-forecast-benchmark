@@ -19,13 +19,24 @@ logger = logging.getLogger(__name__)
 def _load_chronos(model_name: str, device: str):
     """Cache Chronos pipeline across splits to avoid repeated loading."""
     import torch
-    from chronos import ChronosPipeline
+    try:
+        from chronos import BaseChronosPipeline as Pipeline
+    except ImportError:
+        from chronos import ChronosPipeline as Pipeline
 
-    pipeline = ChronosPipeline.from_pretrained(
-        model_name,
-        device_map=device,
-        torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
-    )
+    kwargs = {
+        "device_map": device,
+        "torch_dtype": torch.bfloat16 if device == "cuda" else torch.float32,
+    }
+    try:
+        pipeline = Pipeline.from_pretrained(model_name, **kwargs)
+    except OSError:
+        logger.warning("Chronos load failed; retrying with force_download=True")
+        pipeline = Pipeline.from_pretrained(
+            model_name,
+            force_download=True,
+            **kwargs,
+        )
     return pipeline
 
 
@@ -47,11 +58,10 @@ def chronos_forecast(
     series = train_df[target].dropna().values
     context = torch.tensor(series, dtype=torch.float32)
 
-    forecast = pipeline.predict(
-        context=context,
-        prediction_length=horizon,
-        num_samples=num_samples,
-    )
+    try:
+        forecast = pipeline.predict(context, horizon, num_samples=num_samples)
+    except TypeError:
+        forecast = pipeline.predict(context, horizon)
     # forecast shape: [num_series=1, num_samples, prediction_length]
-    samples = forecast[0].numpy()  # shape (num_samples, horizon)
+    samples = forecast[0].detach().cpu().numpy()  # shape (num_samples, horizon)
     return np.median(samples, axis=0)

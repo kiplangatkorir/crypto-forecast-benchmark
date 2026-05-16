@@ -23,6 +23,7 @@ results/
 !configs/*.csv
 *.png
 !docs/*.png
+!paper/figures/*.png
 
 # Notebooks
 .ipynb_checkpoints/

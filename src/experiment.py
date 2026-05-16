@@ -11,10 +11,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
+import random
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 from src import baselines, neural, foundation
 from src.data import load_all_assets
-from src.metrics import all_metrics
+from src.metrics import all_metrics as compute_all_metrics
 from src.splits import expanding_window_splits
 
 logging.basicConfig(
@@ -31,6 +31,60 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger = logging.getLogger("experiment")
+
+
+def is_model_applicable(model_name: str, target: str) -> bool:
+    """Return whether a model should be evaluated for the given target."""
+    if model_name == "garch" and "vol" not in target:
+        return False
+    return True
+
+
+def _parse_csv(value: Optional[str]) -> Optional[List[str]]:
+    """Parse a comma-separated CLI value into a list."""
+    if value is None:
+        return None
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _parse_int_csv(value: Optional[str]) -> Optional[List[int]]:
+    parsed = _parse_csv(value)
+    if parsed is None:
+        return None
+    return [int(item) for item in parsed]
+
+
+def _set_seed(seed: int) -> None:
+    """Seed common RNGs used by baseline and neural models."""
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        logger.debug("torch not installed; skipping torch seed setup")
+
+
+def apply_runtime_overrides(cfg: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+    """Apply CLI/runtime overrides to a loaded config dictionary."""
+    if getattr(args, "targets", None):
+        cfg["targets"] = _parse_csv(args.targets)
+    if getattr(args, "horizons", None):
+        cfg["horizons"] = _parse_int_csv(args.horizons)
+    if getattr(args, "results_dir", None):
+        cfg["output"]["results_dir"] = args.results_dir
+        cfg["output"]["figures_dir"] = str(Path(args.results_dir) / "figures")
+    if getattr(args, "max_splits", None) is not None:
+        cfg["walk_forward"]["max_splits"] = args.max_splits
+    if getattr(args, "model_max_steps", None) is not None:
+        for model_name in ("lstm", "nbeats", "patchtst", "tft"):
+            cfg.setdefault("models", {}).setdefault(model_name, {})["max_steps"] = (
+                args.model_max_steps
+            )
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +110,8 @@ def forecast_one(
         order = tuple(models_cfg.get("arima", {}).get("order", (2, 0, 2)))
         return baselines.arima_forecast(train_df, horizon, target, order=order)
     if model_name == "garch":
+        if not is_model_applicable(model_name, target):
+            raise ValueError("GARCH forecasts conditional volatility, not returns")
         g = models_cfg.get("garch", {})
         # GARCH forecasts VOLATILITY (std of returns), not returns themselves.
         # Only meaningful when target is a volatility column.
@@ -93,7 +149,13 @@ def forecast_one(
 # Main runner
 # ---------------------------------------------------------------------------
 
-def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFrame:
+def run_experiment(
+    cfg: Dict[str, Any],
+    args: argparse.Namespace,
+    on_checkpoint: Optional[Callable[[], None]] = None,
+) -> pd.DataFrame:
+    _set_seed(int(cfg.get("seed", 42)))
+
     assets = args.assets.split(",") if args.assets else cfg["data"]["assets"]
     models = args.models.split(",") if args.models else ["naive", "arima"]
     targets = cfg["targets"]
@@ -111,11 +173,19 @@ def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFram
 
     results_dir = Path(cfg["output"]["results_dir"])
     results_dir.mkdir(parents=True, exist_ok=True)
-    predictions_path = results_dir / "predictions.parquet"
-    metrics_path = results_dir / "metrics.csv"
+    predictions_path = results_dir / cfg["output"].get("predictions_file", "predictions.parquet")
+    metrics_path = results_dir / cfg["output"].get("metrics_file", "metrics.csv")
 
     all_predictions: List[Dict[str, Any]] = []
-    all_metrics: List[Dict[str, Any]] = []
+    metric_records: List[Dict[str, Any]] = []
+
+    def save_outputs() -> None:
+        metrics_df = pd.DataFrame(metric_records)
+        preds_df = pd.DataFrame(all_predictions)
+        metrics_df.to_csv(metrics_path, index=False)
+        preds_df.to_parquet(predictions_path)
+        if on_checkpoint is not None:
+            on_checkpoint()
 
     for asset, df in data.items():
         for target in targets:
@@ -131,6 +201,13 @@ def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFram
                     max_splits=cfg["walk_forward"].get("max_splits"),
                 ))
                 for model_name in models:
+                    if not is_model_applicable(model_name, target):
+                        logger.info(
+                            "Skipping model=%s for target=%s because it is not applicable",
+                            model_name,
+                            target,
+                        )
+                        continue
                     pbar = tqdm(
                         splits,
                         desc=f"{asset} | {target} | h={horizon} | {model_name}",
@@ -139,7 +216,7 @@ def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFram
                         try:
                             pred = forecast_one(model_name, sp.train, horizon, target, cfg)
                         except Exception as e:
-                            logger.error(
+                            logger.exception(
                                 "Forecast failed: asset=%s model=%s target=%s split=%d: %s",
                                 asset, model_name, target, sp.split_id, e,
                             )
@@ -149,7 +226,7 @@ def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFram
                         y_true = sp.test[target].iloc[:horizon].values
                         y_pred = np.asarray(pred[:horizon]).ravel()
 
-                        metrics = all_metrics(y_true, y_pred)
+                        metrics = compute_all_metrics(y_true, y_pred)
                         record = {
                             "asset": asset,
                             "target": target,
@@ -160,7 +237,7 @@ def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFram
                             "test_end": sp.test_start + pd.Timedelta(days=horizon-1),
                             **metrics,
                         }
-                        all_metrics.append(record)
+                        metric_records.append(record)
 
                         # Store all predictions for downstream DM tests
                         for k in range(horizon):
@@ -175,11 +252,12 @@ def run_experiment(cfg: Dict[str, Any], args: argparse.Namespace) -> pd.DataFram
                                 "y_true": float(y_true[k]) if k < len(y_true) else np.nan,
                                 "y_pred": float(y_pred[k]) if k < len(y_pred) else np.nan,
                             })
+                    if metric_records:
+                        save_outputs()
 
-    metrics_df = pd.DataFrame(all_metrics)
+    metrics_df = pd.DataFrame(metric_records)
     preds_df = pd.DataFrame(all_predictions)
-    metrics_df.to_csv(metrics_path, index=False)
-    preds_df.to_parquet(predictions_path)
+    save_outputs()
     logger.info("Saved metrics: %s (%d rows)", metrics_path, len(metrics_df))
     logger.info("Saved predictions: %s (%d rows)", predictions_path, len(preds_df))
     return metrics_df
@@ -195,11 +273,22 @@ def main():
                         help="Comma-separated list (overrides config).")
     parser.add_argument("--fast", action="store_true",
                         help="Use only 5 splits, for smoke testing.")
+    parser.add_argument("--targets", default=None,
+                        help="Comma-separated targets, e.g. log_return,realized_vol_7d.")
+    parser.add_argument("--horizons", default=None,
+                        help="Comma-separated forecast horizons, e.g. 1,7.")
+    parser.add_argument("--results-dir", default=None,
+                        help="Override output results directory.")
+    parser.add_argument("--max-splits", type=int, default=None,
+                        help="Override max walk-forward splits.")
+    parser.add_argument("--model-max-steps", type=int, default=None,
+                        help="Override max_steps for neural models.")
     args = parser.parse_args()
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
+    cfg = apply_runtime_overrides(cfg, args)
     run_experiment(cfg, args)
 
 
