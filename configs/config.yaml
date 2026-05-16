@@ -1,0 +1,88 @@
+# ICICPE 2026 Crypto Forecast Benchmark - Configuration
+
+data:
+  assets:
+    - BTC-USD
+    - ETH-USD
+    - SOL-USD
+    - BNB-USD
+    - XRP-USD
+  start_date: "2020-01-01"
+  end_date: "2025-12-31"
+  interval: "1d"
+
+# Forecast targets
+targets:
+  - log_return         # near-random-walk, hard
+  - realized_vol_7d    # more predictable
+
+# Forecast horizons (days ahead)
+horizons:
+  - 1
+  - 7
+
+# Walk-forward validation
+walk_forward:
+  initial_train_days: 730    # 2 years
+  test_horizon_days: 30
+  step_days: 30              # non-overlapping test windows
+  max_splits: null           # null = use all available
+
+# Feature engineering for tabular models (XGBoost)
+features:
+  lags: [1, 2, 3, 5, 7, 14, 30]
+  rolling_windows: [7, 14, 30]
+  rolling_stats: [mean, std]
+
+# Model-specific hyperparameters
+models:
+  arima:
+    order: [2, 0, 2]         # (p, d, q); d=0 because we forecast returns
+  garch:
+    p: 1
+    q: 1
+    mean: "AR"
+    lags: 1
+    vol: "GARCH"
+  xgboost:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.05
+    early_stopping_rounds: 30
+    objective: "reg:squarederror"
+  lstm:
+    hidden_size: 128
+    num_layers: 2
+    learning_rate: 1e-3
+    max_steps: 1000
+    input_size: 60
+  nbeats:
+    max_steps: 1000
+    input_size: 60
+    learning_rate: 1e-3
+  patchtst:
+    max_steps: 1000
+    input_size: 60
+    patch_len: 16
+    stride: 8
+    n_heads: 4
+    learning_rate: 1e-4
+  tft:
+    max_steps: 1000
+    input_size: 60
+    hidden_size: 64
+    n_head: 4
+    learning_rate: 1e-3
+  chronos:
+    model_name: "amazon/chronos-t5-small"
+    num_samples: 20          # for probabilistic forecasts
+
+# Output
+output:
+  results_dir: "results"
+  predictions_file: "predictions.parquet"
+  metrics_file: "metrics.csv"
+  figures_dir: "results/figures"
+
+# Reproducibility
+seed: 42

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual envs
+venv/
+env/
+.venv/
+ENV/
+
+# Data & results (regeneratable)
+data_cache/
+results/
+*.parquet
+*.csv
+!configs/*.csv
+*.png
+!docs/*.png
+
+# Notebooks
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# Experiment tracking
+wandb/
+mlruns/
+
+# Models / checkpoints
+*.ckpt
+*.pt
+*.pth
+lightning_logs/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Claude Code
+.claude/cache/
