@@ -89,4 +89,9 @@ downloaded locally as zip archives under `results/modal_archives/`.
 Lambda Labs, RunPod, or Vast.ai for cheapest L4/A10 instances. Colab Pro+ also works.
 
 ## Citation
-If this benchmark is useful for your research, please cite the accompanying ICICPE 2026 paper.
+If this benchmark is useful for your research, please cite the accompanying ICICPE 2026 paper. We have also published the paper on [ResearchGate](https://www.researchgate.net/publication/405856354_When_Do_Neural_Forecasters_Help_A_Walk-Forward_Benchmark_on_Cryptocurrency_Returns_and_Volatility).
+
+```
+Korir, Gilbert & Mbalu, Ndetto & Aranotu, Chinedum & Tekenah, Harris. (2026). 
+When Do Neural Forecasters Help? A Walk-Forward Benchmark on Cryptocurrency Returns and Volatility. 
+```
