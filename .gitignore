@@ -47,3 +47,5 @@ lightning_logs/
 
 # Claude Code
 .claude/cache/
+paper/
+Agents.md
