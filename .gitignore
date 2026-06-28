@@ -49,3 +49,4 @@ lightning_logs/
 .claude/cache/
 paper/
 Agents.md
+CLAUDE.md
