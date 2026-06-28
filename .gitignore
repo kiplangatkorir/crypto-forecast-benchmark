@@ -47,6 +47,10 @@ lightning_logs/
 
 # Claude Code
 .claude/cache/
+
+# Paper draft (local only)
 paper/
-Agents.md
-CLAUDE.md
+
+# Markdown (keep README only)
+*.md
+!README.md
