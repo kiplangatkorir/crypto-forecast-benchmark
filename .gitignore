@@ -46,7 +46,7 @@ lightning_logs/
 *.swp
 
 # Claude Code
-.claude/cache/
+.claude/
 
 # Paper draft (local only)
 paper/
